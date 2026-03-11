@@ -1,4 +1,5 @@
 import { Sport } from '@prisma/client';
+import { buildFeatures, calibrateProbability, confidenceFrom, weightedScore } from './sportModel.js';
 
 export function impliedProbability(odds: number) {
   return odds > 0 ? 1 / odds : 0;
@@ -12,15 +13,8 @@ export function edgePct(estimatedProbability: number, implied: number) {
   return estimatedProbability - implied;
 }
 
-function clamp(p: number) {
-  return Math.max(0.01, Math.min(0.99, p));
-}
-
 /**
- * Heuristic sport model (SIM-ready):
- * - football: favors balance + liquidity (market efficiency)
- * - tennis: sharper favorite/underdog separation
- * - mma: more variance (finish risk), confidence penalized when odds are wide
+ * Structured sport model (feature-based + calibration)
  */
 export function estimateProbabilityBySport(params: {
   sport: Sport;
@@ -31,37 +25,18 @@ export function estimateProbabilityBySport(params: {
 }) {
   const { sport, implied, odds, liquidity, isFavorite } = params;
 
-  // liquidity reliability 0..1
-  const liqScore = Math.max(0, Math.min(1, liquidity / 2500));
+  const f = buildFeatures({ sport, implied, odds, liquidity, isFavorite });
+  const score = weightedScore(sport, f);
+  const estimatedProbability = calibrateProbability(implied, score, sport);
+  const confidence = confidenceFrom(score, liquidity);
 
-  let delta = 0;
-  let confidence = 0.5;
-  let factors: string[] = [];
+  const factors = [
+    `form=${f.form.toFixed(2)}`,
+    `matchup=${f.matchup.toFixed(2)}`,
+    `context=${f.context.toFixed(2)}`,
+    `marketQuality=${f.marketQuality.toFixed(2)}`,
+    `score=${score.toFixed(2)}`,
+  ];
 
-  if (sport === 'SOCCER') {
-    // football market usually efficient; edge is conservative
-    delta = 0.008 + liqScore * 0.012;
-    confidence = 0.45 + liqScore * 0.35;
-    factors = ['forma reciente/equilibrio', 'mercado líquido'];
-  } else if (sport === 'TENNIS') {
-    // tennis allows stronger favorite edges in some matchups
-    delta = isFavorite ? 0.02 + liqScore * 0.01 : 0.012 + liqScore * 0.008;
-    confidence = 0.5 + liqScore * 0.3;
-    factors = ['superficie/ranking', 'head-to-head'];
-  } else {
-    // MMA/UFC: high variance; add edge but reduce confidence on long odds
-    const variancePenalty = odds > 3 ? 0.006 : 0;
-    delta = 0.018 + liqScore * 0.012 - variancePenalty;
-    confidence = 0.42 + liqScore * 0.28 - (odds > 3 ? 0.08 : 0);
-    factors = ['estilo de pelea y método de victoria', 'riesgo de finish'];
-  }
-
-  const estimated = clamp(implied + delta);
-  confidence = Math.max(0.25, Math.min(0.95, confidence));
-
-  return {
-    estimatedProbability: estimated,
-    confidence,
-    factors,
-  };
+  return { estimatedProbability, confidence, factors };
 }
