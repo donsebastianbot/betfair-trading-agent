@@ -12,9 +12,19 @@ type Overview = {
   roi: number;
   decisions: any[];
   bets: any[];
+  bankrollSeries: { t: string; bankroll: number }[];
+  sportPerformance: { sport: string; bets: number; pnl: number }[];
+  strategyPerformance: { strategy: string; bets: number; pnl: number }[];
+  risk: {
+    dailyPnl: number;
+    openExposure: number;
+    maxDrawdownPct: number;
+    maxDailyLoss: number;
+    maxSimultaneousRisk: number;
+  };
 };
 
-const API_BASE = 'http://localhost:4001';
+const API_BASE = '/api/proxy';
 
 export default function Home() {
   const [data, setData] = useState<Overview | null>(null);
@@ -62,6 +72,9 @@ export default function Home() {
 
   if (!data) return <main style={{ padding: 24, color: '#fff', background: '#09090b', minHeight: '100vh' }}>Cargando dashboard...</main>;
 
+  const minB = Math.min(...(data.bankrollSeries.map((x) => x.bankroll).concat([1000])));
+  const maxB = Math.max(...(data.bankrollSeries.map((x) => x.bankroll).concat([1000])));
+
   return (
     <main style={{ maxWidth: 1250, margin: '0 auto', padding: 24, color: '#fafafa', background: '#09090b', minHeight: '100vh' }}>
       <h1 style={{ fontSize: 34, margin: 0 }}>Betfair Autonomous Trading Agent</h1>
@@ -88,6 +101,49 @@ export default function Home() {
           </div>
         ))}
       </div>
+
+      <section style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 12 }}>
+        <div style={{ border: '1px solid #27272a', borderRadius: 12, padding: 12, background: '#111114' }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Evolución del bank</div>
+          <div style={{ height: 140, display: 'flex', alignItems: 'end', gap: 4 }}>
+            {(data.bankrollSeries.length ? data.bankrollSeries : [{ t: new Date().toISOString(), bankroll: 1000 }]).slice(-40).map((p, i) => {
+              const h = maxB === minB ? 40 : Math.max(8, ((p.bankroll - minB) / (maxB - minB)) * 120);
+              return <div key={i} title={`${p.bankroll}`} style={{ width: 8, height: h, background: '#22c55e', borderRadius: 4 }} />;
+            })}
+          </div>
+        </div>
+
+        <div style={{ border: '1px solid #27272a', borderRadius: 12, padding: 12, background: '#111114' }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Riesgo (tiempo real)</div>
+          <div style={{ fontSize: 13, color: '#d4d4d8', lineHeight: 1.7 }}>
+            <div>PnL diario: <b>{data.risk.dailyPnl.toFixed(2)}</b> / límite {-Math.abs(data.risk.maxDailyLoss).toFixed(2)}</div>
+            <div>Exposición abierta: <b>{data.risk.openExposure.toFixed(2)}</b> / máximo {data.risk.maxSimultaneousRisk.toFixed(2)}</div>
+            <div>Drawdown máx: <b>{data.risk.maxDrawdownPct.toFixed(2)}%</b></div>
+          </div>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ border: '1px solid #27272a', borderRadius: 12, padding: 12, background: '#111114' }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Rendimiento por deporte</div>
+          {(data.sportPerformance || []).map((s) => (
+            <div key={s.sport} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
+              <span>{s.sport}</span><span>{s.bets} bets · PnL {s.pnl.toFixed(2)}</span>
+            </div>
+          ))}
+          {(!data.sportPerformance || data.sportPerformance.length === 0) && <div style={{ color: '#a1a1aa', fontSize: 13 }}>Sin datos todavía.</div>}
+        </div>
+
+        <div style={{ border: '1px solid #27272a', borderRadius: 12, padding: 12, background: '#111114' }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Rendimiento por estrategia</div>
+          {(data.strategyPerformance || []).map((s) => (
+            <div key={s.strategy} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
+              <span>{s.strategy}</span><span>{s.bets} bets · PnL {s.pnl.toFixed(2)}</span>
+            </div>
+          ))}
+          {(!data.strategyPerformance || data.strategyPerformance.length === 0) && <div style={{ color: '#a1a1aa', fontSize: 13 }}>Sin datos todavía.</div>}
+        </div>
+      </section>
 
       <section style={{ marginTop: 18, border: '1px solid #27272a', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: 12, borderBottom: '1px solid #27272a', fontWeight: 700 }}>Apuestas (tiempo real)</div>
