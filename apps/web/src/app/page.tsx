@@ -42,6 +42,16 @@ export default function Home() {
   }, []);
 
   async function setMode(mode: 'SIM' | 'LIVE') {
+    if (mode === 'LIVE') {
+      const c1 = window.confirm('Vas a activar LIVE. Esto puede enviar apuestas reales. ¿Continuar?');
+      if (!c1) return;
+      const phrase = window.prompt('Escribe LIVE para confirmar:');
+      if (phrase !== 'LIVE') {
+        alert('Confirmación incorrecta. Se mantiene SIM.');
+        return;
+      }
+    }
+
     setBusy(true);
     await fetch(`${API_BASE}/system/mode`, {
       method: 'POST',
@@ -105,12 +115,17 @@ export default function Home() {
       <section style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 12 }}>
         <div style={{ border: '1px solid #27272a', borderRadius: 12, padding: 12, background: '#111114' }}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>Evolución del bank</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#a1a1aa', marginBottom: 4 }}>
+            <span>{minB.toFixed(2)}</span>
+            <span>{maxB.toFixed(2)}</span>
+          </div>
           <div style={{ height: 140, display: 'flex', alignItems: 'end', gap: 4 }}>
             {(data.bankrollSeries.length ? data.bankrollSeries : [{ t: new Date().toISOString(), bankroll: 1000 }]).slice(-40).map((p, i) => {
               const h = maxB === minB ? 40 : Math.max(8, ((p.bankroll - minB) / (maxB - minB)) * 120);
-              return <div key={i} title={`${p.bankroll}`} style={{ width: 8, height: h, background: '#22c55e', borderRadius: 4 }} />;
+              return <div key={i} title={`${new Date(p.t).toLocaleDateString()} · ${p.bankroll}`} style={{ width: 8, height: h, background: '#22c55e', borderRadius: 4 }} />;
             })}
           </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: '#a1a1aa' }}>Últimos puntos: {Math.min(40, data.bankrollSeries.length || 1)}</div>
         </div>
 
         <div style={{ border: '1px solid #27272a', borderRadius: 12, padding: 12, background: '#111114' }}>
@@ -146,7 +161,10 @@ export default function Home() {
       </section>
 
       <section style={{ marginTop: 18, border: '1px solid #27272a', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: 12, borderBottom: '1px solid #27272a', fontWeight: 700 }}>Apuestas (tiempo real)</div>
+        <div style={{ padding: 12, borderBottom: '1px solid #27272a', fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+          <span>Apuestas (tiempo real)</span>
+          <a href={`${API_BASE}/journal/csv`} style={{ color: '#93c5fd', textDecoration: 'underline' }}>Descargar journal CSV</a>
+        </div>
         <div style={{ maxHeight: 320, overflow: 'auto' }}>
           {(data.bets || []).map((b: any) => (
             <div key={b.id} style={{ padding: 10, borderBottom: '1px solid #1f1f23', display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr', gap: 8 }}>
