@@ -1,15 +1,16 @@
 import { Queue, Worker } from 'bullmq';
-import { redis } from '../lib/redis.js';
 import { runAgentCycle } from '../services/runner.js';
 
-export const analysisQueue = new Queue('analysis', { connection: redis });
+const connection = { url: process.env.REDIS_URL || 'redis://localhost:6379' };
+
+export const analysisQueue = new Queue('analysis', { connection });
 
 export const analysisWorker = new Worker(
   'analysis',
   async () => {
     await runAgentCycle();
   },
-  { connection: redis }
+  { connection }
 );
 
 export async function scheduleRecurring() {

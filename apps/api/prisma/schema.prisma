@@ -7,18 +7,44 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum AgentMode { SIM LIVE }
-enum DecisionAction { BET IGNORE WAIT }
-enum BetStatus { PENDING MATCHED PARTIAL UNMATCHED SETTLED CANCELLED REJECTED }
-enum Sport { SOCCER TENNIS MMA }
+enum AgentMode {
+  SIM
+  LIVE
+}
 
-enum Side { BACK LAY }
+enum DecisionAction {
+  BET
+  IGNORE
+  WAIT
+}
+
+enum BetStatus {
+  PENDING
+  MATCHED
+  PARTIAL
+  UNMATCHED
+  SETTLED
+  CANCELLED
+  REJECTED
+}
+
+enum Sport {
+  SOCCER
+  TENNIS
+  MMA
+}
+
+enum Side {
+  BACK
+  LAY
+}
 
 model SystemConfig {
   id                    String   @id @default("singleton")
   mode                  AgentMode @default(SIM)
   bankroll              Float    @default(1000)
   stakePct              Float    @default(0.02)
+  maxStake              Float    @default(50)
   maxOpenBets           Int      @default(5)
   maxDailyLoss          Float    @default(100)
   maxSimultaneousRisk   Float    @default(300)
