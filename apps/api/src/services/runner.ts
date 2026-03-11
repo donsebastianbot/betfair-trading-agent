@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { BetfairClient } from '../betfair/client.js';
-import { edgePct, expectedValue, impliedProbability } from '../engine/probability.js';
+import { edgePct, expectedValue, impliedProbability, estimateProbabilityBySport } from '../engine/probability.js';
 import { calcStake, canBet } from '../engine/risk.js';
 
 export async function runAgentCycle() {
@@ -47,16 +47,20 @@ export async function runAgentCycle() {
     if (!book || book.status !== 'OPEN') continue;
 
     const eventId = String(m.event?.id || marketId);
+    const eventTypeId = String((m as any).eventType?.id || '1');
+    const sport = eventTypeId === '2' ? 'TENNIS' : eventTypeId === '7522' ? 'MMA' : 'SOCCER';
+
     await prisma.event.upsert({
       where: { id: eventId },
       update: {
         competition: m.competition?.name || null,
         homeName: m.event?.name || null,
         startTime: new Date(m.marketStartTime),
+        sport: sport as any,
       },
       create: {
         id: eventId,
-        sport: 'SOCCER',
+        sport: sport as any,
         competition: m.competition?.name || null,
         homeName: m.event?.name || null,
         startTime: new Date(m.marketStartTime),
@@ -81,12 +85,18 @@ export async function runAgentCycle() {
         },
       });
 
-      // Placeholder "model" probability
-      const estimated = Math.min(0.9, impliedProbability(bestBack) + 0.04);
       const implied = impliedProbability(bestBack);
+      const model = estimateProbabilityBySport({
+        sport: sport as any,
+        implied,
+        odds: bestBack,
+        liquidity,
+        isFavorite: bestBack < 2,
+      });
+      const estimated = model.estimatedProbability;
       const ev = expectedValue(estimated, bestBack);
       const edge = edgePct(estimated, implied);
-      const confidence = Math.max(0.2, Math.min(1, edge * 8));
+      const confidence = model.confidence;
 
       const analysis = await prisma.analysis.create({
         data: {
@@ -100,7 +110,7 @@ export async function runAgentCycle() {
           expectedValue: ev,
           liquidity,
           confidence,
-          rationale: `Modelo estima ${(estimated * 100).toFixed(1)}% vs implícita ${(implied * 100).toFixed(1)}%. EV ${(ev * 100).toFixed(1)}%.`,
+          rationale: `${sport} model: ${model.factors.join(' + ')}. p_est ${(estimated * 100).toFixed(1)}% vs p_impl ${(implied * 100).toFixed(1)}%. EV ${(ev * 100).toFixed(1)}%.`,
         },
       });
 
