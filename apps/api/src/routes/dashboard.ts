@@ -20,6 +20,11 @@ dashboardRouter.get('/overview', async (_req, res) => {
     take: 200,
   });
 
+  const bets = await prisma.bet.findMany({
+    orderBy: { updatedAt: 'desc' },
+    take: 200,
+  });
+
   res.json({
     mode: cfg.mode,
     autoPaused: cfg.autoPaused,
@@ -29,5 +34,6 @@ dashboardRouter.get('/overview', async (_req, res) => {
     winRate,
     roi,
     decisions,
+    bets,
   });
 });

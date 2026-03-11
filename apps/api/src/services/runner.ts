@@ -7,20 +7,42 @@ export async function runAgentCycle() {
   const cfg = await prisma.systemConfig.upsert({ where: { id: 'singleton' }, update: {}, create: { id: 'singleton' } });
 
   const client = new BetfairClient();
-  await client.loginWithSessionToken();
 
-  // Example market query: soccer match odds next 24h
+  // Example market query: soccer/tennis/mma next 24h
   const now = new Date();
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const markets = await client.listMarketCatalogue({
-    eventTypeIds: ['1', '2', '7522'],
-    marketTypeCodes: ['MATCH_ODDS'],
-    marketStartTime: { from: now.toISOString(), to: in24h.toISOString() },
-  }, 25);
+
+  let markets: any[] = [];
+  if (cfg.mode === 'LIVE' && process.env.APP_MODE === 'LIVE') {
+    await client.loginWithSessionToken();
+    markets = await client.listMarketCatalogue({
+      eventTypeIds: ['1', '2', '7522'],
+      marketTypeCodes: ['MATCH_ODDS'],
+      marketStartTime: { from: now.toISOString(), to: in24h.toISOString() },
+    }, 25);
+  } else {
+    // SIM fallback sample markets (no external call needed)
+    markets = [
+      {
+        marketId: `SIM-${Date.now()}-1`,
+        marketStartTime: in24h.toISOString(),
+        event: { id: `SIM-EVT-${Date.now()}`, name: 'SIM Team A v SIM Team B' },
+        competition: { name: 'SIM League' },
+      },
+    ];
+  }
 
   for (const m of markets) {
     const marketId = m.marketId as string;
-    const marketBook = await client.listMarketBook([marketId]);
+    const marketBook = (cfg.mode === 'LIVE' && process.env.APP_MODE === 'LIVE')
+      ? await client.listMarketBook([marketId])
+      : [{
+          status: 'OPEN',
+          runners: [
+            { selectionId: 1, ex: { availableToBack: [{ price: 2.2 }], availableToLay: [{ price: 2.24 }], tradedVolume: [{ size: 600 }] } },
+            { selectionId: 2, ex: { availableToBack: [{ price: 1.8 }], availableToLay: [{ price: 1.83 }], tradedVolume: [{ size: 700 }] } },
+          ],
+        }];
     const book = marketBook?.[0];
     if (!book || book.status !== 'OPEN') continue;
 

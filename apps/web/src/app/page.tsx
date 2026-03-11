@@ -1,17 +1,78 @@
-async function getOverview() {
-  const res = await fetch('http://api:4001/dashboard/overview', { cache: 'no-store' }).catch(async () =>
-    fetch('http://localhost:4001/dashboard/overview', { cache: 'no-store' })
-  );
-  return res.json();
-}
+"use client";
 
-export default async function Home() {
-  const data = await getOverview();
+import { useEffect, useState } from 'react';
+
+type Overview = {
+  mode: 'SIM' | 'LIVE';
+  autoPaused: boolean;
+  totalBets: number;
+  activeBets: number;
+  profit: number;
+  winRate: number;
+  roi: number;
+  decisions: any[];
+  bets: any[];
+};
+
+const API_BASE = 'http://localhost:4001';
+
+export default function Home() {
+  const [data, setData] = useState<Overview | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const res = await fetch(`${API_BASE}/dashboard/overview`);
+    setData(await res.json());
+  }
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  async function setMode(mode: 'SIM' | 'LIVE') {
+    setBusy(true);
+    await fetch(`${API_BASE}/system/mode`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    });
+    await load();
+    setBusy(false);
+  }
+
+  async function setPause(paused: boolean) {
+    setBusy(true);
+    await fetch(`${API_BASE}/system/pause`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paused }),
+    });
+    await load();
+    setBusy(false);
+  }
+
+  async function runCycle() {
+    setBusy(true);
+    await fetch(`${API_BASE}/agent/run-once`, { method: 'POST' });
+    await load();
+    setBusy(false);
+  }
+
+  if (!data) return <main style={{ padding: 24, color: '#fff', background: '#09090b', minHeight: '100vh' }}>Cargando dashboard...</main>;
 
   return (
-    <main style={{ maxWidth: 1200, margin: '0 auto', padding: 24 }}>
+    <main style={{ maxWidth: 1250, margin: '0 auto', padding: 24, color: '#fafafa', background: '#09090b', minHeight: '100vh' }}>
       <h1 style={{ fontSize: 34, margin: 0 }}>Betfair Autonomous Trading Agent</h1>
-      <p style={{ color: '#a1a1aa' }}>Terminal de control · modo <b>{data.mode}</b> · autoPause {String(data.autoPaused)}</p>
+      <p style={{ color: '#a1a1aa' }}>Modo <b>{data.mode}</b> · AutoPause <b>{String(data.autoPaused)}</b></p>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        <button disabled={busy} onClick={() => setMode('SIM')}>SIM</button>
+        <button disabled={busy} onClick={() => setMode('LIVE')}>LIVE</button>
+        <button disabled={busy} onClick={() => setPause(!data.autoPaused)}>{data.autoPaused ? 'Reanudar agente' : 'Pausar agente'}</button>
+        <button disabled={busy} onClick={runCycle}>Run cycle now</button>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 12, marginTop: 18 }}>
         {[
@@ -27,6 +88,22 @@ export default async function Home() {
           </div>
         ))}
       </div>
+
+      <section style={{ marginTop: 18, border: '1px solid #27272a', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: 12, borderBottom: '1px solid #27272a', fontWeight: 700 }}>Apuestas (tiempo real)</div>
+        <div style={{ maxHeight: 320, overflow: 'auto' }}>
+          {(data.bets || []).map((b: any) => (
+            <div key={b.id} style={{ padding: 10, borderBottom: '1px solid #1f1f23', display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr', gap: 8 }}>
+              <div>{b.marketId}</div>
+              <div>{b.side}</div>
+              <div>odds {b.odds}</div>
+              <div>stake {b.stake}</div>
+              <div><b>{b.status}</b></div>
+            </div>
+          ))}
+          {data.bets.length === 0 && <div style={{ padding: 12, color: '#a1a1aa' }}>Sin apuestas todavía.</div>}
+        </div>
+      </section>
 
       <section style={{ marginTop: 18, border: '1px solid #27272a', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ padding: 12, borderBottom: '1px solid #27272a', fontWeight: 700 }}>Decisiones del agente (explicadas)</div>
@@ -48,10 +125,6 @@ export default async function Home() {
           {(!data.decisions || data.decisions.length === 0) && <div style={{ padding: 12, color: '#a1a1aa' }}>Sin decisiones todavía.</div>}
         </div>
       </section>
-
-      <p style={{ color: '#71717a', marginTop: 16, fontSize: 12 }}>
-        Seguridad: en SIM no se ejecutan apuestas reales. Para LIVE cambia el modo manualmente y valida credenciales Betfair oficiales.
-      </p>
     </main>
   );
 }
