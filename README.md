@@ -53,6 +53,20 @@ Después:
 - `GET /dashboard/overview`
 - `POST /agent/run-once` (dispara ciclo manual)
 
-## Nota de integración Betfair
+## Login por certificado Betfair (Node) — listo en código
+El cliente `apps/api/src/betfair/client.ts` ya incluye `certLogin()` con `https.Agent` usando certificado y clave.
+
+Variables necesarias:
+- `BETFAIR_APP_KEY`
+- `BETFAIR_USERNAME`
+- `BETFAIR_PASSWORD`
+- `BETFAIR_CERT_PATH`
+- `BETFAIR_KEY_PATH`
+- `BETFAIR_KEY_PASSPHRASE` (opcional)
+
+Uso recomendado en LIVE:
+1. Cargar variables en `.env`
+2. Invocar `await client.ensureAuthenticated()` antes de consultar/operar
+3. Mantener `APP_MODE=SIM` hasta validar login y mercados
+
 La base está lista con endpoints oficiales (`listMarketCatalogue`, `listMarketBook`, `placeOrders`, `cancelOrders`, `listCurrentOrders`).
-Para producción LIVE debes completar autenticación por certificado y montar certificados en runtime de forma segura.
