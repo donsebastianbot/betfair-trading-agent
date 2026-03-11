@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AgentMode { SIM LIVE }
+enum DecisionAction { BET IGNORE WAIT }
+enum BetStatus { PENDING MATCHED PARTIAL UNMATCHED SETTLED CANCELLED REJECTED }
+enum Sport { SOCCER TENNIS MMA }
+
+enum Side { BACK LAY }
+
+model SystemConfig {
+  id                    String   @id @default("singleton")
+  mode                  AgentMode @default(SIM)
+  bankroll              Float    @default(1000)
+  stakePct              Float    @default(0.02)
+  maxOpenBets           Int      @default(5)
+  maxDailyLoss          Float    @default(100)
+  maxSimultaneousRisk   Float    @default(300)
+  minLiquidity          Float    @default(100)
+  minEdgePct            Float    @default(0.03)
+  stopLossDrawdownPct   Float    @default(0.15)
+  autoPaused            Boolean  @default(false)
+  updatedAt             DateTime @updatedAt
+}
+
+model Event {
+  id             String   @id
+  sport          Sport
+  competition    String?
+  homeName       String?
+  awayName       String?
+  startTime      DateTime
+  createdAt      DateTime @default(now())
+
+  snapshots      MarketSnapshot[]
+  analyses       Analysis[]
+}
+
+model MarketSnapshot {
+  id             String   @id @default(cuid())
+  eventId        String
+  marketId       String
+  selectionId    Int
+  runnerName     String
+  bestBack       Float
+  bestLay        Float
+  tradedVolume   Float
+  marketStatus   String
+  capturedAt     DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([marketId])
+  @@index([capturedAt])
+}
+
+model Analysis {
+  id                 String   @id @default(cuid())
+  eventId            String
+  marketId           String
+  selectionId        Int
+  runnerName         String
+  impliedProbability Float
+  estimatedProbability Float
+  edgePct            Float
+  expectedValue      Float
+  liquidity          Float
+  confidence         Float
+  rationale          String
+  createdAt          DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  decision Decision?
+
+  @@index([eventId])
+  @@index([marketId])
+}
+
+model Decision {
+  id            String   @id @default(cuid())
+  analysisId    String   @unique
+  action        DecisionAction
+  stake         Float?
+  reason        String
+  createdAt     DateTime @default(now())
+
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  bet      Bet?
+}
+
+model Bet {
+  id            String   @id @default(cuid())
+  decisionId    String   @unique
+  betfairBetId  String?
+  marketId      String
+  selectionId   Int
+  side          Side
+  odds          Float
+  stake         Float
+  matchedSize   Float?
+  avgPriceMatched Float?
+  status        BetStatus @default(PENDING)
+  pnl           Float?
+  placedAt      DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  decision Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@index([marketId])
+  @@index([status])
+}
+
+model RunLog {
+  id          String   @id @default(cuid())
+  level       String
+  message     String
+  metaJson    String?
+  createdAt   DateTime @default(now())
+}
